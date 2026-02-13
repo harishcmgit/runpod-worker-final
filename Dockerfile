@@ -45,7 +45,7 @@ RUN comfy node install --exit-on-fail ComfyUI_AdvancedRefluxControl
 COPY ComfyUI_DS /comfyui/custom_nodes/comfyui_document_scanner
 COPY ComfyUI_SP /comfyui/custom_nodes/ComfyUI_SeamlessPattern
 COPY ComfyUI_BR /comfyui/custom_nodes/ComfyUI_blender_render
-
+RUN pip install -r /comfyui/custom_nodes/ComfyUI_BlenderAI/requirements.txt || true
 # =======================================================
 # 5. DOWNLOAD MODELS (Using wget)
 # =======================================================
