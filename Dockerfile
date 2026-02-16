@@ -1,22 +1,23 @@
-# 🟢 USE THE OFFICIAL WORKER BASE (It manages the Headless Server for you)
+# 🟢 USE THE OFFICIAL WORKER BASE
 FROM runpod/worker-comfyui:5.5.1-base
 
+USER root
+
 # =======================================================
-# 1. SYSTEM DEPENDENCIES
+# 1. SYSTEM DEPENDENCIES & BLENDER 4.1 INSTALLATION
 # =======================================================
 RUN apt-get update && apt-get install -y \
+    wget unzip xvfb xz-utils libgl1 libglib2.0-0 libxrender1 \
+    libsm6 libxext6 libxi6 libxkbcommon-x11-0 psmisc \
     git \
-    curl \
-    wget \
-    blender \
-    libgl1 \
-    libglib2.0-0 \
-    libxrender1 \
-    libsm6 \
-    libxext6 \
-    libjpeg-dev \
-    libpng-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# ⬇️ MANUALLY INSTALL BLENDER 4.1
+RUN wget -q https://download.blender.org/release/Blender4.1/blender-4.1.0-linux-x64.tar.xz \
+    && tar -xf blender-4.1.0-linux-x64.tar.xz -C /usr/local/ \
+    && mv /usr/local/blender-4.1.0-linux-x64 /usr/local/blender \
+    && ln -s /usr/local/blender/blender /usr/bin/blender \
+    && rm blender-4.1.0-linux-x64.tar.xz
 
 # =======================================================
 # 2. PYTHON DEPENDENCIES
@@ -24,7 +25,7 @@ RUN apt-get update && apt-get install -y \
 RUN pip install --no-cache-dir numpy pillow opencv-python-headless
 
 # =======================================================
-# 3. INSTALL CUSTOM NODES (Standard)
+# 3. INSTALL STANDARD NODES
 # =======================================================
 RUN comfy node install --exit-on-fail comfyui_essentials@1.1.0 --mode remote
 RUN comfy node install --exit-on-fail ComfyUI_Comfyroll_CustomNodes
@@ -39,42 +40,46 @@ RUN comfy node install --exit-on-fail comfyui_layerstyle@2.0.38
 RUN comfy node install --exit-on-fail ComfyUI_AdvancedRefluxControl
 
 # =======================================================
-# 4. COPY LOCAL CUSTOM NODES (Use your folder names)
+# 4. COPY LOCAL CUSTOM NODES (Renaming on the fly!)
 # =======================================================
-# Ensure these folder names match EXACTLY what is in your GitHub repo
-COPY ComfyUI_DS /comfyui/custom_nodes/comfyui_document_scanner
+# We take 'ComfyUI_DS' from your repo -> rename to 'ComfyUI_Document_Scanner'
+COPY ComfyUI_DS /comfyui/custom_nodes/ComfyUI_Document_Scanner
+
+# We take 'ComfyUI_SP' from your repo -> rename to 'ComfyUI_SeamlessPattern'
 COPY ComfyUI_SP /comfyui/custom_nodes/ComfyUI_SeamlessPattern
+
+# 🟢 We take 'ComfyUI_BR' from your repo -> rename to 'ComfyUI_blender_render'
+# This fixes the "Folder Not Found" error!
 COPY ComfyUI_BR /comfyui/custom_nodes/ComfyUI_blender_render
-RUN pip install -r /comfyui/custom_nodes/ComfyUI_BlenderAI/requirements.txt || true
+
+# Install Requirements (Using the new folder name)
+RUN pip install -r /comfyui/custom_nodes/ComfyUI_blender_render/requirements.txt || true
+
 # =======================================================
-# 5. DOWNLOAD MODELS (Using wget)
+# 5. 🟢 THE SYMLINK FIX (Using the new folder name) 🟢
 # =======================================================
-# FLUX T5XXL
-RUN wget -O /comfyui/models/clip/t5xxl_fp16.safetensors https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors
+# We create the 'blender' folder inside 'ComfyUI_blender_render'
+RUN mkdir -p /comfyui/custom_nodes/ComfyUI_blender_render/blender \
+    && ln -s /usr/bin/blender /comfyui/custom_nodes/ComfyUI_blender_render/blender/blender
 
-# FLUX CLIP-L
-RUN wget -O /comfyui/models/clip/clip_l.safetensors https://huggingface.co/camenduru/FLUX.1-dev/resolve/main/clip_l.safetensors
+# =======================================================
+# 6. DOWNLOAD MODELS
+# =======================================================
+RUN wget -q -O /comfyui/models/clip/t5xxl_fp16.safetensors https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors
+RUN wget -q -O /comfyui/models/clip/clip_l.safetensors https://huggingface.co/camenduru/FLUX.1-dev/resolve/main/clip_l.safetensors
+RUN wget -q -O /comfyui/models/vae/ae.safetensors https://huggingface.co/camenduru/FLUX.1-dev/resolve/d616d290809ffe206732ac4665a9ddcdfb839743/ae.safetensors
+RUN wget -q -O /comfyui/models/clip_vision/sglip2-so400m-patch16-512.safetensors https://huggingface.co/google/siglip2-so400m-patch16-512/resolve/main/model.safetensors
+RUN wget -q -O /comfyui/models/style_models/flux1-redux-dev.safetensors https://huggingface.co/camenduru/FLUX.1-dev/resolve/d616d290809ffe206732ac4665a9ddcdfb839743/flux1-redux-dev.safetensors
+RUN wget -q -O /comfyui/models/diffusion_models/flux1-dev.safetensors https://huggingface.co/yichengup/flux.1-fill-dev-OneReward/resolve/main/unet_fp8.safetensors
+RUN wget -q -O /comfyui/models/upscale_models/4x-UltraSharp.pth https://huggingface.co/Kim2091/UltraSharp/resolve/main/4x-UltraSharp.pth
+RUN wget -q -O /comfyui/models/diffusion_models/flux1-dev-fp8-e4m3fn.safetensors https://huggingface.co/Kijai/flux-fp8/resolve/main/flux1-dev-fp8-e4m3fn.safetensors
 
-# FLUX VAE
-RUN wget -O /comfyui/models/vae/ae.safetensors https://huggingface.co/camenduru/FLUX.1-dev/resolve/d616d290809ffe206732ac4665a9ddcdfb839743/ae.safetensors
+# BLENDER ASSET FILE
+RUN mkdir -p /comfyui/models/blender
+RUN wget -q -O /comfyui/models/blender/file.blend https://huggingface.co/Srivarshan7/my-assets/resolve/b61a31e/file.blend
 
-# SigLIP2 Vision
-RUN wget -O /comfyui/models/clip_vision/sglip2-so400m-patch16-512.safetensors https://huggingface.co/google/siglip2-so400m-patch16-512/resolve/main/model.safetensors
-
-# FLUX Redux Style
-RUN wget -O /comfyui/models/style_models/flux1-redux-dev.safetensors https://huggingface.co/camenduru/FLUX.1-dev/resolve/d616d290809ffe206732ac4665a9ddcdfb839743/flux1-redux-dev.safetensors
-
-# FLUX UNet (Renamed for your workflow)
-RUN wget -O /comfyui/models/diffusion_models/flux1-dev.safetensors https://huggingface.co/yichengup/flux.1-fill-dev-OneReward/resolve/main/unet_fp8.safetensors
-
-# UltraSharp
-RUN wget -O /comfyui/models/upscale_models/4x-UltraSharp.pth https://huggingface.co/Kim2091/UltraSharp/resolve/main/4x-UltraSharp.pth
-
-# Extra Flux FP8
-RUN wget -O /comfyui/models/diffusion_models/flux1-dev-fp8-e4m3fn.safetensors https://huggingface.co/Kijai/flux-fp8/resolve/main/flux1-dev-fp8-e4m3fn.safetensors
-
-# BLEND File
-RUN wget -O /comfyui/input/file.blend https://huggingface.co/Srivarshan7/my-assets/resolve/b61a31e/file.blend
-
-# ⚠️ CRITICAL: DO NOT ADD "CMD python handler.py"
-# The base image already has the correct startup command.
+# =======================================================
+# 7. STARTUP COMMAND
+# =======================================================
+ENV DISPLAY=:99
+CMD Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 & sleep 5 && python -u /rp_handler.py
