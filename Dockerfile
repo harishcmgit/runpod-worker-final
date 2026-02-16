@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ⬇️ MANUALLY INSTALL BLENDER 4.1 (Crucial Fix for Green Folds)
+# We install 4.1 because the node tries to download 4.5 and fails (HTTP 403)
 RUN wget -q https://download.blender.org/release/Blender4.1/blender-4.1.0-linux-x64.tar.xz \
     && tar -xf blender-4.1.0-linux-x64.tar.xz -C /usr/local/ \
     && mv /usr/local/blender-4.1.0-linux-x64 /usr/local/blender \
@@ -40,25 +41,27 @@ RUN comfy node install --exit-on-fail comfyui_layerstyle@2.0.38
 RUN comfy node install --exit-on-fail ComfyUI_AdvancedRefluxControl
 
 # =======================================================
-# 4. COPY LOCAL CUSTOM NODES (From YOUR Repo)
+# 4. DOWNLOAD CUSTOM NODES (Fixes "File Not Found" Build Errors)
 # =======================================================
-# ⚠️ MAKE SURE THESE FOLDERS EXIST IN YOUR GITHUB REPO ROOT
-# ⚠️ NAMES MUST BE EXACT (Case Sensitive!)
+# ⚠️ WE USE GIT CLONE INSTEAD OF COPY. THIS IS SAFER.
 
-COPY ComfyUI_DS /comfyui/custom_nodes/ComfyUI_Document_Scanner
-COPY ComfyUI_SP /comfyui/custom_nodes/ComfyUI_SeamlessPattern
+# Document Scanner
+RUN git clone https://github.com/Srivarshan7/ComfyUI_Document_Scanner /comfyui/custom_nodes/ComfyUI_Document_Scanner
 
-# We copy to 'ComfyUI_BlenderAI' to match the Symlink path below
-COPY ComfyUI_BR /comfyui/custom_nodes/ComfyUI_BlenderAI
+# Seamless Pattern
+RUN git clone https://github.com/Srivarshan7/ComfyUI_SeamlessPattern /comfyui/custom_nodes/ComfyUI_SeamlessPattern
+
+# Blender AI (The Critical Node)
+RUN git clone https://github.com/Srivarshan7/ComfyUI_BlenderAI /comfyui/custom_nodes/ComfyUI_BlenderAI
 
 # Install Requirements for BlenderAI
 RUN pip install -r /comfyui/custom_nodes/ComfyUI_BlenderAI/requirements.txt || true
 
 # =======================================================
-# 5. 🟢 THE SYMLINK FIX (Fixes HTTP 403 Error) 🟢
+# 5. 🟢 THE SYMLINK FIX (Fixes HTTP 403 Forbidden Error) 🟢
 # =======================================================
 # This tricks the node into using our pre-installed Blender 4.1
-# Note: This path MUST match the COPY destination above (ComfyUI_BlenderAI)
+# The node looks in this specific folder for a 'blender' binary.
 RUN mkdir -p /comfyui/custom_nodes/ComfyUI_BlenderAI/blender \
     && ln -s /usr/bin/blender /comfyui/custom_nodes/ComfyUI_BlenderAI/blender/blender
 
@@ -74,7 +77,7 @@ RUN wget -q -O /comfyui/models/diffusion_models/flux1-dev.safetensors https://hu
 RUN wget -q -O /comfyui/models/upscale_models/4x-UltraSharp.pth https://huggingface.co/Kim2091/UltraSharp/resolve/main/4x-UltraSharp.pth
 RUN wget -q -O /comfyui/models/diffusion_models/flux1-dev-fp8-e4m3fn.safetensors https://huggingface.co/Kijai/flux-fp8/resolve/main/flux1-dev-fp8-e4m3fn.safetensors
 
-# 🟢 BLENDER ASSET FILE (Corrected Path to match JSON)
+# 🟢 BLENDER ASSET FILE (Corrected Path)
 RUN mkdir -p /comfyui/models/blender
 RUN wget -q -O /comfyui/models/blender/file.blend https://huggingface.co/Srivarshan7/my-assets/resolve/b61a31e/file.blend
 
