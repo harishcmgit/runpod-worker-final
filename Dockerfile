@@ -1,24 +1,22 @@
-# 🟢 USE THE OFFICIAL WORKER BASE
+# 🟢 USE THE OFFICIAL WORKER BASE (It manages the Headless Server for you)
 FROM runpod/worker-comfyui:5.5.1-base
 
-USER root
-
 # =======================================================
-# 1. SYSTEM DEPENDENCIES & BLENDER 4.1 INSTALLATION
+# 1. SYSTEM DEPENDENCIES
 # =======================================================
 RUN apt-get update && apt-get install -y \
-    wget unzip xvfb xz-utils libgl1 libglib2.0-0 libxrender1 \
-    libsm6 libxext6 libxi6 libxkbcommon-x11-0 psmisc \
     git \
+    curl \
+    wget \
+    blender \
+    libgl1 \
+    libglib2.0-0 \
+    libxrender1 \
+    libsm6 \
+    libxext6 \
+    libjpeg-dev \
+    libpng-dev \
     && rm -rf /var/lib/apt/lists/*
-
-# ⬇️ MANUALLY INSTALL BLENDER 4.1 (Crucial Fix for Green Folds)
-# We install 4.1 because the node tries to download 4.5 and fails (HTTP 403)
-RUN wget -q https://download.blender.org/release/Blender4.1/blender-4.1.0-linux-x64.tar.xz \
-    && tar -xf blender-4.1.0-linux-x64.tar.xz -C /usr/local/ \
-    && mv /usr/local/blender-4.1.0-linux-x64 /usr/local/blender \
-    && ln -s /usr/local/blender/blender /usr/bin/blender \
-    && rm blender-4.1.0-linux-x64.tar.xz
 
 # =======================================================
 # 2. PYTHON DEPENDENCIES
@@ -26,7 +24,7 @@ RUN wget -q https://download.blender.org/release/Blender4.1/blender-4.1.0-linux-
 RUN pip install --no-cache-dir numpy pillow opencv-python-headless
 
 # =======================================================
-# 3. INSTALL STANDARD NODES
+# 3. INSTALL CUSTOM NODES (Standard)
 # =======================================================
 RUN comfy node install --exit-on-fail comfyui_essentials@1.1.0 --mode remote
 RUN comfy node install --exit-on-fail ComfyUI_Comfyroll_CustomNodes
@@ -41,48 +39,42 @@ RUN comfy node install --exit-on-fail comfyui_layerstyle@2.0.38
 RUN comfy node install --exit-on-fail ComfyUI_AdvancedRefluxControl
 
 # =======================================================
-# 4. DOWNLOAD CUSTOM NODES (Fixes "File Not Found" Build Errors)
+# 4. COPY LOCAL CUSTOM NODES (Use your folder names)
 # =======================================================
-# ⚠️ WE USE GIT CLONE INSTEAD OF COPY. THIS IS SAFER.
-
-# Document Scanner
-RUN git clone https://github.com/Srivarshan7/ComfyUI_Document_Scanner /comfyui/custom_nodes/ComfyUI_Document_Scanner
-
-# Seamless Pattern
-RUN git clone https://github.com/Srivarshan7/ComfyUI_SeamlessPattern /comfyui/custom_nodes/ComfyUI_SeamlessPattern
-
-# Blender AI (The Critical Node)
-RUN git clone https://github.com/Srivarshan7/ComfyUI_BlenderAI /comfyui/custom_nodes/ComfyUI_BlenderAI
-
-# Install Requirements for BlenderAI
+# Ensure these folder names match EXACTLY what is in your GitHub repo
+COPY ComfyUI_DS /comfyui/custom_nodes/comfyui_document_scanner
+COPY ComfyUI_SP /comfyui/custom_nodes/ComfyUI_SeamlessPattern
+COPY ComfyUI_BR /comfyui/custom_nodes/ComfyUI_blender_render
 RUN pip install -r /comfyui/custom_nodes/ComfyUI_BlenderAI/requirements.txt || true
+# =======================================================
+# 5. DOWNLOAD MODELS (Using wget)
+# =======================================================
+# FLUX T5XXL
+RUN wget -O /comfyui/models/clip/t5xxl_fp16.safetensors https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors
 
-# =======================================================
-# 5. 🟢 THE SYMLINK FIX (Fixes HTTP 403 Forbidden Error) 🟢
-# =======================================================
-# This tricks the node into using our pre-installed Blender 4.1
-# The node looks in this specific folder for a 'blender' binary.
-RUN mkdir -p /comfyui/custom_nodes/ComfyUI_BlenderAI/blender \
-    && ln -s /usr/bin/blender /comfyui/custom_nodes/ComfyUI_BlenderAI/blender/blender
+# FLUX CLIP-L
+RUN wget -O /comfyui/models/clip/clip_l.safetensors https://huggingface.co/camenduru/FLUX.1-dev/resolve/main/clip_l.safetensors
 
-# =======================================================
-# 6. DOWNLOAD MODELS
-# =======================================================
-RUN wget -q -O /comfyui/models/clip/t5xxl_fp16.safetensors https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors
-RUN wget -q -O /comfyui/models/clip/clip_l.safetensors https://huggingface.co/camenduru/FLUX.1-dev/resolve/main/clip_l.safetensors
-RUN wget -q -O /comfyui/models/vae/ae.safetensors https://huggingface.co/camenduru/FLUX.1-dev/resolve/d616d290809ffe206732ac4665a9ddcdfb839743/ae.safetensors
-RUN wget -q -O /comfyui/models/clip_vision/sglip2-so400m-patch16-512.safetensors https://huggingface.co/google/siglip2-so400m-patch16-512/resolve/main/model.safetensors
-RUN wget -q -O /comfyui/models/style_models/flux1-redux-dev.safetensors https://huggingface.co/camenduru/FLUX.1-dev/resolve/d616d290809ffe206732ac4665a9ddcdfb839743/flux1-redux-dev.safetensors
-RUN wget -q -O /comfyui/models/diffusion_models/flux1-dev.safetensors https://huggingface.co/yichengup/flux.1-fill-dev-OneReward/resolve/main/unet_fp8.safetensors
-RUN wget -q -O /comfyui/models/upscale_models/4x-UltraSharp.pth https://huggingface.co/Kim2091/UltraSharp/resolve/main/4x-UltraSharp.pth
-RUN wget -q -O /comfyui/models/diffusion_models/flux1-dev-fp8-e4m3fn.safetensors https://huggingface.co/Kijai/flux-fp8/resolve/main/flux1-dev-fp8-e4m3fn.safetensors
+# FLUX VAE
+RUN wget -O /comfyui/models/vae/ae.safetensors https://huggingface.co/camenduru/FLUX.1-dev/resolve/d616d290809ffe206732ac4665a9ddcdfb839743/ae.safetensors
 
-# 🟢 BLENDER ASSET FILE (Corrected Path)
-RUN mkdir -p /comfyui/models/blender
-RUN wget -q -O /comfyui/models/blender/file.blend https://huggingface.co/Srivarshan7/my-assets/resolve/b61a31e/file.blend
+# SigLIP2 Vision
+RUN wget -O /comfyui/models/clip_vision/sglip2-so400m-patch16-512.safetensors https://huggingface.co/google/siglip2-so400m-patch16-512/resolve/main/model.safetensors
 
-# =======================================================
-# 7. STARTUP COMMAND
-# =======================================================
-ENV DISPLAY=:99
-CMD Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 & sleep 5 && python -u /rp_handler.py
+# FLUX Redux Style
+RUN wget -O /comfyui/models/style_models/flux1-redux-dev.safetensors https://huggingface.co/camenduru/FLUX.1-dev/resolve/d616d290809ffe206732ac4665a9ddcdfb839743/flux1-redux-dev.safetensors
+
+# FLUX UNet (Renamed for your workflow)
+RUN wget -O /comfyui/models/diffusion_models/flux1-dev.safetensors https://huggingface.co/yichengup/flux.1-fill-dev-OneReward/resolve/main/unet_fp8.safetensors
+
+# UltraSharp
+RUN wget -O /comfyui/models/upscale_models/4x-UltraSharp.pth https://huggingface.co/Kim2091/UltraSharp/resolve/main/4x-UltraSharp.pth
+
+# Extra Flux FP8
+RUN wget -O /comfyui/models/diffusion_models/flux1-dev-fp8-e4m3fn.safetensors https://huggingface.co/Kijai/flux-fp8/resolve/main/flux1-dev-fp8-e4m3fn.safetensors
+
+# BLEND File
+RUN wget -O /comfyui/input/file.blend https://huggingface.co/Srivarshan7/my-assets/resolve/b61a31e/file.blend
+
+# ⚠️ CRITICAL: DO NOT ADD "CMD python handler.py"
+# The base image already has the correct startup command.
