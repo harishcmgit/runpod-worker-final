@@ -4,14 +4,15 @@ FROM runpod/worker-comfyui:5.5.1-base
 USER root
 
 # =======================================================
-# 1. SYSTEM DEPENDENCIES & BLENDER INSTALLATION
+# 1. SYSTEM DEPENDENCIES & BLENDER 4.1 INSTALLATION
 # =======================================================
 RUN apt-get update && apt-get install -y \
     wget unzip xvfb xz-utils libgl1 libglib2.0-0 libxrender1 \
     libsm6 libxext6 libxi6 libxkbcommon-x11-0 psmisc \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# ⬇️ INSTALL SYSTEM BLENDER (4.1.0)
+# ⬇️ MANUALLY INSTALL BLENDER 4.1 (Crucial Fix for Green Folds)
 RUN wget -q https://download.blender.org/release/Blender4.1/blender-4.1.0-linux-x64.tar.xz \
     && tar -xf blender-4.1.0-linux-x64.tar.xz -C /usr/local/ \
     && mv /usr/local/blender-4.1.0-linux-x64 /usr/local/blender \
@@ -24,7 +25,7 @@ RUN wget -q https://download.blender.org/release/Blender4.1/blender-4.1.0-linux-
 RUN pip install --no-cache-dir numpy pillow opencv-python-headless
 
 # =======================================================
-# 3. INSTALL STANDARD CUSTOM NODES
+# 3. INSTALL STANDARD NODES
 # =======================================================
 RUN comfy node install --exit-on-fail comfyui_essentials@1.1.0 --mode remote
 RUN comfy node install --exit-on-fail ComfyUI_Comfyroll_CustomNodes
@@ -39,20 +40,25 @@ RUN comfy node install --exit-on-fail comfyui_layerstyle@2.0.38
 RUN comfy node install --exit-on-fail ComfyUI_AdvancedRefluxControl
 
 # =======================================================
-# 4. COPY YOUR LOCAL NODES
+# 4. COPY LOCAL CUSTOM NODES (From YOUR Repo)
 # =======================================================
+# ⚠️ MAKE SURE THESE FOLDERS EXIST IN YOUR GITHUB REPO ROOT
+# ⚠️ NAMES MUST BE EXACT (Case Sensitive!)
+
 COPY ComfyUI_DS /comfyui/custom_nodes/ComfyUI_Document_Scanner
 COPY ComfyUI_SP /comfyui/custom_nodes/ComfyUI_SeamlessPattern
+
+# We copy to 'ComfyUI_BlenderAI' to match the Symlink path below
 COPY ComfyUI_BR /comfyui/custom_nodes/ComfyUI_BlenderAI
 
-# ⚠️ INSTALL REQUIREMENTS
+# Install Requirements for BlenderAI
 RUN pip install -r /comfyui/custom_nodes/ComfyUI_BlenderAI/requirements.txt || true
 
 # =======================================================
-# 5. 🟢 THE FIX: SYMLINK BLENDER 🟢
+# 5. 🟢 THE SYMLINK FIX (Fixes HTTP 403 Error) 🟢
 # =======================================================
-# This creates the folder the node looks for and links it to the installed Blender.
-# This PREVENTS the node from trying to download (and failing).
+# This tricks the node into using our pre-installed Blender 4.1
+# Note: This path MUST match the COPY destination above (ComfyUI_BlenderAI)
 RUN mkdir -p /comfyui/custom_nodes/ComfyUI_BlenderAI/blender \
     && ln -s /usr/bin/blender /comfyui/custom_nodes/ComfyUI_BlenderAI/blender/blender
 
@@ -68,7 +74,7 @@ RUN wget -q -O /comfyui/models/diffusion_models/flux1-dev.safetensors https://hu
 RUN wget -q -O /comfyui/models/upscale_models/4x-UltraSharp.pth https://huggingface.co/Kim2091/UltraSharp/resolve/main/4x-UltraSharp.pth
 RUN wget -q -O /comfyui/models/diffusion_models/flux1-dev-fp8-e4m3fn.safetensors https://huggingface.co/Kijai/flux-fp8/resolve/main/flux1-dev-fp8-e4m3fn.safetensors
 
-# BLENDER ASSET FILE
+# 🟢 BLENDER ASSET FILE (Corrected Path to match JSON)
 RUN mkdir -p /comfyui/models/blender
 RUN wget -q -O /comfyui/models/blender/file.blend https://huggingface.co/Srivarshan7/my-assets/resolve/b61a31e/file.blend
 
